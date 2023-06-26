@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import bisect
 import functools
 import itertools
 import math
+import time
 from collections import deque
 from dataclasses import dataclass, field
 from enum import Enum
-import time
 
 import pygame
 
@@ -240,6 +241,9 @@ def setup(head: Node, piece: Piece):
                     visited.add(n)
 
 def possible_paths(src: Node) -> list[list[Node]]:
+    '''
+    Return list of all possible paths from `src`. Uses standard BFS.
+    '''
     moves = []
     visited = set([src])
 
@@ -268,10 +272,38 @@ def possible_paths(src: Node) -> list[list[Node]]:
                         # and if this distance falls within two nodes (aka 5)
                         # within a threshold of 0.5, then `node` is directly
                         # facing `n2` and it's considered a valid move.
-                        if abs(5 - math.sqrt((path[-1].x-n2.x)**2 + (path[-1].y-n2.y)**2)) < .5:
-                            #if path in moves:
-                            #    moves.remove(path)
+                        if abs(math.sqrt((path[-1].x-n2.x)**2 + (path[-1].y-n2.y)**2) - 5) < .5:
                             moves.append(path + [n2])
+                            q.appendleft(path + [n2])
+    return moves
+
+def possible_paths_optimized(src: Node) -> list[list[Node]]:
+    '''
+    Return list of most promising paths from `src`. Uses standard BFS. For use
+    in the `minimax` function. More optimized than using `possible_paths` would
+    be.
+    '''
+    moves = []
+    visited = set([src])
+
+    # the nodes we move to in one step
+    for n in src.neighbours:
+        if n.piece == Piece.EMPTY:
+            visited.add(n)
+            moves.append([src, n])
+
+    q = deque()
+    q.appendleft([src])
+    while q:
+        path = q.pop()
+        for n in path[-1].neighbours:
+            if n not in visited and n.piece != Piece.EMPTY:
+                visited.add(n)
+                for n2 in n.neighbours:
+                    if n2.piece == Piece.EMPTY:
+                        visited.add(n2)
+                        if abs(math.sqrt((path[-1].x-n2.x)**2 + (path[-1].y-n2.y)**2) - 5) < .5:
+                            bisect.insort(moves, path + [n2], key=functools.cmp_to_key(lambda a, b: len(b) - len(a)))
                             q.appendleft(path + [n2])
     return moves
 
@@ -345,7 +377,7 @@ class countcalls(object):
 def minimax(
     board: Node,
     pieces: tuple[list[Node],list[Node]],
-    depth=5,
+    depth=4,
     maximizing=True,
     alpha=-10*100,
     beta=10*100
@@ -356,26 +388,22 @@ def minimax(
     maximize for.
     '''
     if depth == 0:
-        res = 0
-        for n in pieces[0]:
-            res -= distance_from_home(n, n.piece)
-        for n in pieces[1]:
-            res += distance_from_home(n, n.piece)
+        res = sum(distance_from_home(n, n.piece) for n in pieces[1])
+        res -= sum(distance_from_home(n, n.piece) for n in pieces[0])
         return [], res
 
     score = -10**100 if maximizing else 10**100
     bestpath = []
 
-    # loop through all pieces we're trying to maximize/minimize and all their
-    # possible moves.
     for n in pieces[int(not maximizing)]:
-        for path in possible_paths(n):
+        # only consider the 2 most promising paths
+        for path in possible_paths_optimized(n)[:2]:
             src, dst = path[0], path[-1]
 
             # do not consider the moves that require moving back.
-            tmp = distance_from_home(src, n.piece)
+            tmp = distance_from_home(src, src.piece)
             move_piece(src, dst)
-            if distance_from_home(src, src.piece) > tmp:
+            if distance_from_home(dst, dst.piece) > tmp:
                 move_piece(dst, src)
                 continue
 
@@ -509,6 +537,7 @@ while running:
                     pieces(heads[0], turn.get_next())
                 ))
                 time_elapsed = time.time() - start
+                assert score != -10**100 and score != 10**100
                 print(f'{minimax.count()} possibilities in {time_elapsed:.3}s (score: {score:.3}).')
                 assert path
 
