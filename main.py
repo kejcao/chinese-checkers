@@ -512,8 +512,10 @@ while running:
                     highlight = possible_paths(mouse_node)
                     selected = mouse_node
         else:
-            if (mouse_node := collide()) is not None:
-                hovered = mouse_node if mouse_node.piece == turn.get() else None
+            if (mouse_node := collide()) is not None and mouse_node.piece == turn.get():
+                hovered = mouse_node
+            else:
+                hovered = None
 
     draw()
     clock.tick(60)
