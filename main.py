@@ -20,11 +20,16 @@ WHITE = (255, 255, 255)
 RED = (255, 0, 0)
 GREEN = (0, 255, 0)
 BLUE = (0, 0, 255)
+GRAY = (128, 128, 128)
+YELLOW = (255, 255, 0)
 BACKGROUND_YELLOW = (200, 200, 0)
 BACKGROUND_RED = (200, 0, 0)
 BACKGROUND_GREEN = (0, 200, 0)
 DOT_RADIUS = 15.0
 DOT_BORDER_THICKNESS = 3.0
+SHOW_PREVIOUS_MOVE = True
+SHOW_BEST_MOVES = False
+LINE_THICKNESS = 2
 # to make a perfect hexagon we need this magic number. DO NOT TOUCH IT!
 XSCALE = 1.16
 
@@ -167,7 +172,7 @@ def draw_lines(node: Node, seen: set[Node]|None=None):
         seen = set()
     seen.add(node)
     for n in node.neighbours:
-        pygame.draw.line(screen, BLACK, node.pos(), n.pos(), 2)
+        pygame.draw.line(screen, BLACK, node.pos(), n.pos(), LINE_THICKNESS)
         if n not in seen:
             draw_lines(n, seen)
 
@@ -195,12 +200,10 @@ def draw_dots(node: Node, seen: set[Node]|None=None):
     radius = DOT_RADIUS
     if node == hovered:
         radius *= 1.3
-    elif node == previous:
-        radius *= .8
     elif node == selected:
         radius *= 1.3
-    elif node in highlight:
-        color = BLACK
+    elif can_move_to(node):
+        radius *= 1.3
     pygame.draw.circle(screen, color, node.pos(), radius)
 
     # draw the outline.
@@ -208,6 +211,8 @@ def draw_dots(node: Node, seen: set[Node]|None=None):
     color = BLACK
     if node == selected:
         thickness *= 1.4
+    elif can_move_to(node):
+        thickness *= 2
     pygame.draw.circle(screen, color, node.pos(), radius, int(thickness))
 
     for n in node.neighbours:
@@ -234,7 +239,43 @@ def setup(head: Node, piece: Piece):
                     q.appendleft(n)
                     visited.add(n)
 
-def possible_moves(src: Node) -> set[Node]:
+def possible_paths(src: Node) -> list[list[Node]]:
+    moves = []
+    visited = set([src])
+
+    # the nodes we move to in one step
+    for n in src.neighbours:
+        if n.piece == Piece.EMPTY:
+            visited.add(n)
+            moves.append([src, n])
+
+    q = deque()
+    q.appendleft([src])
+    while q:
+        path = q.pop()
+        for n in path[-1].neighbours:
+            # get all neighbours that have pieces on them.
+            if n not in visited and n.piece != Piece.EMPTY:
+                visited.add(n)
+                # if any of these neighbours have an empty space directly in
+                # front of `node`, then add it.
+                for n2 in n.neighbours:
+                    if n2.piece == Piece.EMPTY:
+                        visited.add(n2)
+                        # This seems bad. The only way we can hop is if our
+                        # `node` is directly apart from `n2`, seperated by `n`.
+                        # So what we do is get the actual, physical distance
+                        # and if this distance falls within two nodes (aka 5)
+                        # within a threshold of 0.5, then `node` is directly
+                        # facing `n2` and it's considered a valid move.
+                        if abs(5 - math.sqrt((path[-1].x-n2.x)**2 + (path[-1].y-n2.y)**2)) < .5:
+                            #if path in moves:
+                            #    moves.remove(path)
+                            moves.append(path + [n2])
+                            q.appendleft(path + [n2])
+    return moves
+
+def good_moves(src: Node) -> set[Node]:
     '''
     Returns set of all nodes we are able to move to from `src`. Standard BFS.
     '''
@@ -293,22 +334,10 @@ def pieces(board: Node, color: Piece) -> set[Node]:
                 visited.add(n)
     return pieces
 
-def distance_from_home(n: Node):
+def distance_from_home(n: Node, home: Piece):
     # this function relies on the fact that the red pieces' home are at the
     # bottom and the greens' at the top.
-    assert n.piece != Piece.EMPTY
-    return abs(-n.y - 16) if n.piece == Piece.RED else abs(n.y if n.y > 0 else abs(n.y)+16)
-
-def judge(board: Node, pieces):
-    '''
-    Give a score of the current position. Used in `minimax`.
-    '''
-    res = 0
-    for n in pieces[0]:
-        res -= distance_from_home(n)
-    for n in pieces[1]:
-        res += distance_from_home(n)
-    return res
+    return abs(-n.y - 16) if home == Piece.RED else abs(16 - n.y)
 
 class countcalls(object):
    __instances = {}
@@ -336,7 +365,12 @@ def minimax(board: Node, pieces: tuple[list[Node],list[Node]], depth=5, maximizi
     maximize for.
     '''
     if depth == 0:
-        return None, None, judge(board, pieces)
+        res = 0
+        for n in pieces[0]:
+            res -= distance_from_home(n, n.piece)
+        for n in pieces[1]:
+            res += distance_from_home(n, n.piece)
+        return None, None, res
 
     score = -10**100 if maximizing else 10**100
     best = None, None
@@ -344,8 +378,13 @@ def minimax(board: Node, pieces: tuple[list[Node],list[Node]], depth=5, maximizi
     # loop through all pieces we're trying to maximize/minimize and all their
     # possible moves.
     for n in pieces[int(not maximizing)]:
-        for n2 in possible_moves(n):
+        for n2 in good_moves(n):
+            # do not consider the moves that require moving back.
+            tmp = distance_from_home(n, n.piece)
             move_piece(n, n2)
+            if distance_from_home(n2, n2.piece) > tmp:
+                move_piece(n2, n)
+                continue
             pieces[int(not maximizing)].remove(n)
             pieces[int(not maximizing)].add(n2)
             *_, newscore = minimax(board, pieces, depth-1, not maximizing, alpha, beta)
@@ -382,10 +421,10 @@ class Turn:
 heads, nodes = board()
 running = True
 turn = Turn(Piece.GREEN)
-previous: Node|None = None
+moves: list[list[Node]] = []
 selected: Node|None = None
 hovered: Node|None = None
-highlight: set[Node] = set()
+highlight: list[list[Node]] = []
 
 setup(heads[0], Piece.GREEN)
 setup(heads[3], Piece.RED)
@@ -404,45 +443,21 @@ def collide() -> Node|None:
 
 def deselect():
     global highlight, selected
-    highlight = set()
+    highlight = []
     selected = None
 
 def can_select(n: Node):
     return n.piece == turn.get()
 
-while running:
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            running = False
-        if event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
-            minimax.resetcount()
-            start = time.time()
-            src, dst, _ = minimax(heads[0], (
-                pieces(heads[0], turn.get()),
-                pieces(heads[0], turn.get_next())
-            ))
-            time_elapsed = time.time() - start
-            print(f'took {time_elapsed:.3}s considering {minimax.count()} possibilities.')
-            assert src is not None and dst is not None
-            previous = src
-            move_piece(src, dst)
-            turn.next()
-        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-            if (mouse_node := collide()) is None:
-                deselect()
-            else:
-                if mouse_node in highlight:
-                    turn.next()
-                    previous = selected
-                    move_piece(selected, mouse_node)
-                    deselect()
-                elif can_select(mouse_node):
-                    highlight = possible_moves(mouse_node)
-                    selected = mouse_node
-        else:
-            if (mouse_node := collide()) is not None:
-                hovered = mouse_node if mouse_node.piece == turn.get() else None
+def can_move_to(n: Node):
+    #nodes = set()
+    #for path in highlight:
+    #    for node in path:
+    #        nodes.add(node)
+    #return n in nodes
+    return n in [path[-1] for path in highlight]
 
+def draw():
     screen.fill((255, 255, 255))
 
     # I know magic numbers are bad, but these happen to work from trial and error.
@@ -454,8 +469,78 @@ while running:
     pygame.draw.polygon(screen, BACKGROUND_RED, ((31*SCALE, 25*SCALE), (21.6*SCALE, 25*SCALE), (26.2*SCALE, 17*SCALE)))
 
     draw_lines(heads[0])
+    if SHOW_PREVIOUS_MOVE and moves:
+        for src, dst in zip(moves[-1], moves[-1][1:]):
+            pygame.draw.line(screen, BLACK, src.pos(), dst.pos(), LINE_THICKNESS*3)
     draw_dots(heads[0])
 
-    clock.tick(60)
+    # if SHOW_BEST_MOVES:
+    #     dist = -10*100
+    #     for src in pieces(heads[0], turn.get()):
+    #         for dst in possible_moves(src):
+    #             new = src.y - dst.y if turn.get() == Piece.RED else dst.y - src.y
+    #             if new > dist:
+    #                 dist = new
+    #                 best = src, dst
+    #     src, dst = best
+    #     pygame.draw.line(screen, BLACK, src.pos(), dst.pos(), LINE_THICKNESS*2)
+
     pygame.display.flip()
+
+while running:
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            running = False
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_z and pygame.key.get_mods() & pygame.KMOD_LCTRL:
+                deselect()
+                if moves:
+                    src, *_, dst = moves.pop()
+                    move_piece(dst, src)
+            if event.key == pygame.K_SPACE:
+                deselect()
+                draw()
+
+                # darken screen
+                s = pygame.Surface(pygame.display.get_surface().get_size())
+                s.set_alpha(128)
+                s.fill((0, 0, 0))
+                screen.blit(s, (0, 0))
+                pygame.display.flip()
+
+                # use minimax
+                minimax.resetcount()
+                start = time.time()
+                src, dst, score = minimax(heads[0], (
+                    pieces(heads[0], turn.get()),
+                    pieces(heads[0], turn.get_next())
+                ))
+                time_elapsed = time.time() - start
+                print(f'{minimax.count()} possibilities in {time_elapsed:.3}s (score: {score:.3}).')
+                assert src is not None and dst is not None
+
+                moves.append([src, dst])
+                move_piece(src, dst)
+                turn.next()
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            if (mouse_node := collide()) is None:
+                deselect()
+            else:
+                if can_move_to(mouse_node):
+                    turn.next()
+                    for path in highlight:
+                        if path[0] == selected and path[-1] == mouse_node:
+                            moves.append(path)
+                            break
+                    move_piece(selected, mouse_node)
+                    deselect()
+                elif can_select(mouse_node):
+                    highlight = possible_paths(mouse_node)
+                    selected = mouse_node
+        else:
+            if (mouse_node := collide()) is not None:
+                hovered = mouse_node if mouse_node.piece == turn.get() else None
+
+    draw()
+    clock.tick(60)
 pygame.quit()
