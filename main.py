@@ -357,8 +357,16 @@ class countcalls(object):
    def resetcount(self):
        self.__numcalls = 0
 
+# TODO don't need variable maximizing
 @countcalls
-def minimax(board: Node, pieces: tuple[list[Node],list[Node]], depth=5, maximizing=True, alpha=-10*100, beta=10*100):
+def minimax(
+    board: Node,
+    pieces: tuple[list[Node],list[Node]],
+    depth=5,
+    maximizing=True,
+    alpha=-10*100,
+    beta=10*100
+) -> tuple[list[Node],int]:
     '''
     A simple implementation of minimax with alpha-beta pruning. `pieces[0]`
     should be a list of all the same-colored nodes on the board that we shall
@@ -370,40 +378,42 @@ def minimax(board: Node, pieces: tuple[list[Node],list[Node]], depth=5, maximizi
             res -= distance_from_home(n, n.piece)
         for n in pieces[1]:
             res += distance_from_home(n, n.piece)
-        return None, None, res
+        return [], res
 
     score = -10**100 if maximizing else 10**100
-    best = None, None
+    bestpath = []
 
     # loop through all pieces we're trying to maximize/minimize and all their
     # possible moves.
     for n in pieces[int(not maximizing)]:
-        for n2 in good_moves(n):
+        #for n2 in good_moves(n):
+        for path in possible_paths(n):
             # do not consider the moves that require moving back.
-            tmp = distance_from_home(n, n.piece)
-            move_piece(n, n2)
-            if distance_from_home(n2, n2.piece) > tmp:
-                move_piece(n2, n)
+            src, dst = path[0], path[-1]
+            tmp = distance_from_home(src, n.piece)
+            move_piece(src, dst)
+            if distance_from_home(src, src.piece) > tmp:
+                move_piece(dst, src)
                 continue
-            pieces[int(not maximizing)].remove(n)
-            pieces[int(not maximizing)].add(n2)
+            pieces[int(not maximizing)].remove(src)
+            pieces[int(not maximizing)].add(dst)
             *_, newscore = minimax(board, pieces, depth-1, not maximizing, alpha, beta)
-            pieces[int(not maximizing)].remove(n2)
-            pieces[int(not maximizing)].add(n)
-            move_piece(n2, n)
+            pieces[int(not maximizing)].remove(dst)
+            pieces[int(not maximizing)].add(src)
+            move_piece(dst, src)
 
             if maximizing and newscore > score:
                 score = newscore
-                best = n, n2
+                bestpath = path
                 alpha = max(alpha, newscore)
             elif not maximizing and newscore < score:
                 score = newscore
-                best = n, n2
+                bestpath = path
                 beta = min(beta, newscore)
 
             if beta <= alpha:
-                return best[0], best[1], score
-    return best[0], best[1], score
+                return bestpath, score
+    return bestpath, score
 
 @dataclass
 class Turn:
@@ -511,16 +521,16 @@ while running:
                 # use minimax
                 minimax.resetcount()
                 start = time.time()
-                src, dst, score = minimax(heads[0], (
+                path, score = minimax(heads[0], (
                     pieces(heads[0], turn.get()),
                     pieces(heads[0], turn.get_next())
                 ))
                 time_elapsed = time.time() - start
                 print(f'{minimax.count()} possibilities in {time_elapsed:.3}s (score: {score:.3}).')
-                assert src is not None and dst is not None
+                assert path
 
-                moves.append([src, dst])
-                move_piece(src, dst)
+                moves.append(path)
+                move_piece(path[0], path[-1])
                 turn.next()
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             if (mouse_node := collide()) is None:
