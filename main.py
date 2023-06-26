@@ -275,43 +275,6 @@ def possible_paths(src: Node) -> list[list[Node]]:
                             q.appendleft(path + [n2])
     return moves
 
-def good_moves(src: Node) -> set[Node]:
-    '''
-    Returns set of all nodes we are able to move to from `src`. Standard BFS.
-    '''
-    moves = set()
-    visited = set([src])
-
-    # the nodes we move to in one step
-    for n in src.neighbours:
-        if n.piece == Piece.EMPTY:
-            visited.add(n)
-            moves.add(n)
-
-    q = deque()
-    q.appendleft(src)
-    while q:
-        node = q.pop()
-        for n in node.neighbours:
-            # get all neighbours that have pieces on them.
-            if n not in visited and n.piece != Piece.EMPTY:
-                visited.add(n)
-                # if any of these neighbours have an empty space directly in
-                # front of `node`, then add it.
-                for n2 in n.neighbours:
-                    if n2.piece == Piece.EMPTY:
-                        visited.add(n2)
-                        # This seems bad. The only way we can hop is if our
-                        # `node` is directly apart from `n2`, seperated by `n`.
-                        # So what we do is get the actual, physical distance
-                        # and if this distance falls within two nodes (aka 5)
-                        # within a threshold of 0.5, then `node` is directly
-                        # facing `n2` and it's considered a valid move.
-                        if abs(5 - math.sqrt((node.x-n2.x)**2 + (node.y-n2.y)**2)) < .5:
-                            moves.add(n2)
-                            q.appendleft(n2)
-    return moves
-
 def move_piece(src: Node, dest: Node):
     dest.piece = src.piece
     src.piece = Piece.EMPTY
@@ -357,7 +320,6 @@ class countcalls(object):
    def resetcount(self):
        self.__numcalls = 0
 
-# TODO don't need variable maximizing
 @countcalls
 def minimax(
     board: Node,
@@ -386,20 +348,22 @@ def minimax(
     # loop through all pieces we're trying to maximize/minimize and all their
     # possible moves.
     for n in pieces[int(not maximizing)]:
-        #for n2 in good_moves(n):
         for path in possible_paths(n):
-            # do not consider the moves that require moving back.
             src, dst = path[0], path[-1]
+
+            # do not consider the moves that require moving back.
             tmp = distance_from_home(src, n.piece)
             move_piece(src, dst)
             if distance_from_home(src, src.piece) > tmp:
                 move_piece(dst, src)
                 continue
+
             pieces[int(not maximizing)].remove(src)
             pieces[int(not maximizing)].add(dst)
             *_, newscore = minimax(board, pieces, depth-1, not maximizing, alpha, beta)
             pieces[int(not maximizing)].remove(dst)
             pieces[int(not maximizing)].add(src)
+
             move_piece(dst, src)
 
             if maximizing and newscore > score:
