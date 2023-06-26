@@ -26,7 +26,7 @@ BACKGROUND_YELLOW = (200, 200, 0)
 BACKGROUND_RED = (200, 0, 0)
 BACKGROUND_GREEN = (0, 200, 0)
 DOT_RADIUS = 15.0
-DOT_BORDER_THICKNESS = 3.0
+DOT_BORDER_THICKNESS = 3
 SHOW_PREVIOUS_MOVE = True
 SHOW_BEST_MOVES = False
 LINE_THICKNESS = 2
@@ -275,6 +275,27 @@ def possible_paths(src: Node) -> list[list[Node]]:
                             q.appendleft(path + [n2])
     return moves
 
+def move_piece_with_animation(src: Node, dst: Node, path):
+    original = src.piece
+    color = {
+        Piece.RED: RED,
+        Piece.GREEN: GREEN,
+    }[src.piece]
+    src.piece = Piece.EMPTY
+    for src, dst in zip(path, path[1:]):
+        sx, sy = src.pos()
+        dx, dy = dst.pos()
+        pacex, pacey = (dx-sx)/18, (dy-sy)/18
+        for i in range(18):
+            draw()
+            pos = (sx + pacex*i, sy + pacey*i)
+            pygame.draw.circle(screen, color, pos, DOT_RADIUS*1.3)
+            pygame.draw.circle(screen, BLACK, pos, DOT_RADIUS*1.3, int(DOT_BORDER_THICKNESS*1.3))
+            pygame.display.flip()
+            clock.tick(60)
+    src.piece = original
+    move_piece(src, dst)
+
 def move_piece(src: Node, dest: Node):
     dest.piece = src.piece
     src.piece = Piece.EMPTY
@@ -459,8 +480,6 @@ def draw():
     #     src, dst = best
     #     pygame.draw.line(screen, BLACK, src.pos(), dst.pos(), LINE_THICKNESS*2)
 
-    pygame.display.flip()
-
 while running:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
@@ -494,7 +513,7 @@ while running:
                 assert path
 
                 moves.append(path)
-                move_piece(path[0], path[-1])
+                move_piece_with_animation(path[0], path[-1], path)
                 turn.next()
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             if (mouse_node := collide()) is None:
@@ -506,7 +525,8 @@ while running:
                         if path[0] == selected and path[-1] == mouse_node:
                             moves.append(path)
                             break
-                    move_piece(selected, mouse_node)
+
+                    move_piece_with_animation(selected, mouse_node, moves[-1])
                     deselect()
                 elif can_select(mouse_node):
                     highlight = possible_paths(mouse_node)
@@ -518,5 +538,6 @@ while running:
                 hovered = None
 
     draw()
+    pygame.display.flip()
     clock.tick(60)
 pygame.quit()
