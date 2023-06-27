@@ -29,7 +29,7 @@ BACKGROUND_GREEN = (0, 200, 0)
 DOT_RADIUS = 15.0
 DOT_BORDER_THICKNESS = 3
 SHOW_PREVIOUS_MOVE = True
-SHOW_BEST_MOVES = False
+SHOW_BEST_MOVES = True
 LINE_THICKNESS = 2
 # to make a perfect hexagon we need this magic number. DO NOT TOUCH IT!
 XSCALE = 1.16
@@ -314,6 +314,8 @@ def move_piece_with_animation(src: Node, dst: Node, path):
         Piece.GREEN: GREEN,
     }[src.piece]
     src.piece = Piece.EMPTY
+    global suggested_moves
+    suggested_moves = []
     for src, dst in zip(path, path[1:]):
         sx, sy = src.pos()
         dx, dy = dst.pos()
@@ -327,6 +329,12 @@ def move_piece_with_animation(src: Node, dst: Node, path):
             clock.tick(60)
     src.piece = original
     move_piece(src, dst)
+
+    path, _ = minimax(heads[0], (
+        pieces(heads[0], turn.get_next()),
+        pieces(heads[0], turn.get())
+    ), depth=3)
+    suggested_moves = [path]
 
 def move_piece(src: Node, dest: Node):
     dest.piece = src.piece
@@ -445,6 +453,7 @@ heads, nodes = board()
 running = True
 turn = Turn(Piece.GREEN)
 moves: list[list[Node]] = []
+suggested_moves: list[list[Node]] = []
 selected: Node|None = None
 hovered: Node|None = None
 highlight: list[list[Node]] = []
@@ -495,18 +504,11 @@ def draw():
     if SHOW_PREVIOUS_MOVE and moves:
         for src, dst in zip(moves[-1], moves[-1][1:]):
             pygame.draw.line(screen, BLACK, src.pos(), dst.pos(), LINE_THICKNESS*3)
+    if SHOW_BEST_MOVES:
+        for path in suggested_moves:
+            for src, dst in zip(path, path[1:]):
+                pygame.draw.line(screen, BLUE, src.pos(), dst.pos(), LINE_THICKNESS*3)
     draw_dots(heads[0])
-
-    # if SHOW_BEST_MOVES:
-    #     dist = -10*100
-    #     for src in pieces(heads[0], turn.get()):
-    #         for dst in possible_moves(src):
-    #             new = src.y - dst.y if turn.get() == Piece.RED else dst.y - src.y
-    #             if new > dist:
-    #                 dist = new
-    #                 best = src, dst
-    #     src, dst = best
-    #     pygame.draw.line(screen, BLACK, src.pos(), dst.pos(), LINE_THICKNESS*2)
 
 while running:
     for event in pygame.event.get():
@@ -549,7 +551,6 @@ while running:
                 deselect()
             else:
                 if can_move_to(mouse_node):
-                    turn.next()
                     for path in highlight:
                         if path[0] == selected and path[-1] == mouse_node:
                             moves.append(path)
@@ -557,6 +558,7 @@ while running:
 
                     move_piece_with_animation(selected, mouse_node, moves[-1])
                     deselect()
+                    turn.next()
                 elif can_select(mouse_node):
                     highlight = possible_paths(mouse_node)
                     selected = mouse_node
