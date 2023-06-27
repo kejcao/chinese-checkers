@@ -4,6 +4,7 @@ import bisect
 import functools
 import itertools
 import math
+import random
 import time
 from collections import deque
 from dataclasses import dataclass, field
@@ -305,6 +306,7 @@ def possible_paths_optimized(src: Node) -> list[list[Node]]:
                         if abs(math.sqrt((path[-1].x-n2.x)**2 + (path[-1].y-n2.y)**2) - 5) < .5:
                             bisect.insort(moves, path + [n2], key=functools.cmp_to_key(lambda a, b: len(b) - len(a)))
                             q.appendleft(path + [n2])
+    #random.shuffle(moves)
     return moves
 
 def move_piece_with_animation(src: Node, dst: Node, path):
@@ -333,7 +335,7 @@ def move_piece_with_animation(src: Node, dst: Node, path):
     path, _ = minimax(heads[0], (
         pieces(heads[0], turn.get_next()),
         pieces(heads[0], turn.get())
-    ), depth=3)
+    ), depth=3, consider=2)
     suggested_moves = [path]
 
 def move_piece(src: Node, dest: Node):
@@ -358,10 +360,10 @@ def pieces(board: Node, color: Piece) -> set[Node]:
                 visited.add(n)
     return pieces
 
-def distance_from_home(n: Node, home: Piece):
+def distance_from_target(n: Node, home: Piece):
     # this function relies on the fact that the red pieces' home are at the
     # bottom and the greens' at the top.
-    return abs(-n.y - 16) if home == Piece.RED else abs(16 - n.y)
+    return abs(n.y + 16) if home == Piece.RED else abs(n.y - 16)
 
 class countcalls(object):
    __instances = {}
@@ -386,6 +388,7 @@ def minimax(
     board: Node,
     pieces: tuple[list[Node],list[Node]],
     depth=4,
+    consider=4,
     maximizing=True,
     alpha=-10*100,
     beta=10*100
@@ -396,28 +399,32 @@ def minimax(
     maximize for.
     '''
     if depth == 0:
-        res = sum(distance_from_home(n, n.piece) for n in pieces[1])
-        res -= sum(distance_from_home(n, n.piece) for n in pieces[0])
+        # the farther our opponent is from the target the better
+        res = sum(distance_from_target(n, n.piece) for n in pieces[1])
+        # we penalize according to how far we are from the target.
+        res -= sum(distance_from_target(n, n.piece) for n in pieces[0])
+        # favour the center of the board instead of valuing the fringes
+        for n in pieces[0]:
+            if abs(n.x) > 8:
+                res -= abs(n.x)
         return [], res
 
     score = -10**100 if maximizing else 10**100
     bestpath = []
 
     for n in pieces[int(not maximizing)]:
-        # only consider the 2 most promising paths
-        for path in possible_paths_optimized(n)[:2]:
+        # only consider the most promising paths
+        for path in possible_paths_optimized(n)[:consider]:
             src, dst = path[0], path[-1]
 
-            # do not consider the moves that require moving back.
-            tmp = distance_from_home(src, src.piece)
-            move_piece(src, dst)
-            if distance_from_home(dst, dst.piece) > tmp:
-                move_piece(dst, src)
+            # do not consider the moves that move the piece back.
+            if distance_from_target(dst, dst.piece) > distance_from_target(src, src.piece):
                 continue
+            move_piece(src, dst)
 
             pieces[int(not maximizing)].remove(src)
             pieces[int(not maximizing)].add(dst)
-            *_, newscore = minimax(board, pieces, depth-1, not maximizing, alpha, beta)
+            *_, newscore = minimax(board, pieces, depth-1, consider, not maximizing, alpha, beta)
             pieces[int(not maximizing)].remove(dst)
             pieces[int(not maximizing)].add(src)
 
@@ -482,11 +489,6 @@ def can_select(n: Node):
     return n.piece == turn.get()
 
 def can_move_to(n: Node):
-    #nodes = set()
-    #for path in highlight:
-    #    for node in path:
-    #        nodes.add(node)
-    #return n in nodes
     return n in [path[-1] for path in highlight]
 
 def draw():
