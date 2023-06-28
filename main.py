@@ -366,22 +366,13 @@ def distance_from_target(n: Node, home: Piece):
     return abs(n.y + 16) if home == Piece.RED else abs(n.y - 16)
 
 class countcalls(object):
-   __instances = {}
-
    def __init__(self, f):
-       self.__f = f
-       self.__numcalls = 0
-       countcalls.__instances[f] = self
+       self.f = f
+       self.calls = 0
 
    def __call__(self, *args, **kwargs):
-       self.__numcalls += 1
-       return self.__f(*args, **kwargs)
-
-   def count(self):
-       return countcalls.__instances[self.__f].__numcalls
-
-   def resetcount(self):
-       self.__numcalls = 0
+       self.calls += 1
+       return self.f(*args, **kwargs)
 
 @countcalls
 def minimax(
@@ -534,7 +525,7 @@ while running:
                 pygame.display.flip()
 
                 # use minimax
-                minimax.resetcount()
+                minimax.calls = 0
                 start = time.time()
                 path, score = minimax(heads[0], (
                     pieces(heads[0], turn.get()),
@@ -542,7 +533,7 @@ while running:
                 ))
                 time_elapsed = time.time() - start
                 assert score != -10**100 and score != 10**100
-                print(f'{minimax.count()} possibilities in {time_elapsed:.3}s (score: {score:.3}).')
+                print(f'{minimax.calls} possibilities in {time_elapsed:.3}s (score: {score:.3}).')
                 assert path
 
                 moves.append(path)
