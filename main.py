@@ -450,7 +450,7 @@ class Turn:
 heads, nodes = board()
 running = True
 turn = Turn(Piece.GREEN)
-moves: list[list[Node]] = []
+history: list[list[Node]] = []
 suggested_moves: list[list[Node]] = []
 selected: Node|None = None
 hovered: Node|None = None
@@ -460,7 +460,7 @@ setup(heads[0], Piece.GREEN)
 setup(heads[3], Piece.RED)
 
 pygame.init()
-screen = pygame.display.set_mode((32*SCALE, 32*SCALE))
+screen = pygame.display.set_mode((34*SCALE, 34*SCALE))
 clock = pygame.time.Clock()
 
 def collide() -> Node|None:
@@ -494,8 +494,8 @@ def draw():
     pygame.draw.polygon(screen, BACKGROUND_RED, ((31*SCALE, 25*SCALE), (21.6*SCALE, 25*SCALE), (26.2*SCALE, 17*SCALE)))
 
     draw_lines(heads[0])
-    if SHOW_PREVIOUS_MOVE and moves:
-        for src, dst in zip(moves[-1], moves[-1][1:]):
+    if SHOW_PREVIOUS_MOVE and history:
+        for src, dst in zip(history[-1], history[-1][1:]):
             pygame.draw.line(screen, BLACK, src.pos(), dst.pos(), LINE_THICKNESS*3)
     if SHOW_BEST_MOVES:
         for path in suggested_moves:
@@ -510,8 +510,8 @@ while running:
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_z and pygame.key.get_mods() & pygame.KMOD_LCTRL:
                 deselect()
-                if moves:
-                    src, *_, dst = moves.pop()
+                if history:
+                    src, *_, dst = history.pop()
                     move_piece(dst, src)
             if event.key == pygame.K_SPACE:
                 deselect()
@@ -536,7 +536,7 @@ while running:
                 print(f'{minimax.calls} possibilities in {time_elapsed:.3}s (score: {score:.3}).')
                 assert path
 
-                moves.append(path)
+                history.append(path)
                 move_piece_with_animation(path[0], path[-1], path)
                 turn.next()
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
@@ -546,10 +546,10 @@ while running:
                 if can_move_to(mouse_node):
                     for path in highlight:
                         if path[0] == selected and path[-1] == mouse_node:
-                            moves.append(path)
+                            history.append(path)
                             break
 
-                    move_piece_with_animation(selected, mouse_node, moves[-1])
+                    move_piece_with_animation(selected, mouse_node, history[-1])
                     deselect()
                     turn.next()
                 elif can_select(mouse_node):
