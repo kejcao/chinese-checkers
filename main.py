@@ -455,7 +455,6 @@ suggested_moves: list[list[Node]] = []
 selected: Node|None = None
 hovered: Node|None = None
 highlight: list[list[Node]] = []
-
 setup(heads[0], Piece.GREEN)
 setup(heads[3], Piece.RED)
 
@@ -508,6 +507,17 @@ while running:
         if event.type == pygame.QUIT:
             running = False
         if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_r:
+                heads, nodes = board()
+                running = True
+                turn = Turn(Piece.GREEN)
+                history = []
+                suggested_moves = []
+                selected = None
+                hovered = None
+                highlight = []
+                setup(heads[0], Piece.GREEN)
+                setup(heads[3], Piece.RED)
             if event.key == pygame.K_z and pygame.key.get_mods() & pygame.KMOD_LCTRL:
                 deselect()
                 if history:
