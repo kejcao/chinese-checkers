@@ -16,7 +16,7 @@ import pygame
 32x32 board, we assume green pieces up top and red pieces on the bottom.
 '''
 
-SCALE = 20
+SCALE = 30
 BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
 RED = (255, 0, 0)
@@ -27,11 +27,11 @@ YELLOW = (255, 255, 0)
 BACKGROUND_YELLOW = (200, 200, 0)
 BACKGROUND_RED = (200, 0, 0)
 BACKGROUND_GREEN = (0, 200, 0)
-DOT_RADIUS = 15.0
-DOT_BORDER_THICKNESS = 3
+DOT_RADIUS = .75*SCALE
+DOT_BORDER_THICKNESS = .15*SCALE
 SHOW_PREVIOUS_MOVE = True
 SHOW_BEST_MOVES = True
-LINE_THICKNESS = 2
+LINE_THICKNESS = .1*SCALE
 # to make a perfect hexagon we need this magic number. DO NOT TOUCH IT!
 XSCALE = 1.16
 
@@ -174,7 +174,7 @@ def draw_lines(node: Node, seen: set[Node]|None=None):
         seen = set()
     seen.add(node)
     for n in node.neighbours:
-        pygame.draw.line(screen, BLACK, node.pos(), n.pos(), LINE_THICKNESS)
+        pygame.draw.line(screen, BLACK, node.pos(), n.pos(), int(LINE_THICKNESS))
         if n not in seen:
             draw_lines(n, seen)
 
@@ -466,7 +466,7 @@ def collide() -> Node|None:
     for n in nodes:
         sx, sy = n.pos()
         dx, dy = pygame.mouse.get_pos()
-        if math.sqrt((sx-dx)**2 + (sy-dy)**2) <= DOT_RADIUS*1.3:
+        if math.sqrt((sx-dx)**2 + (sy-dy)**2) <= DOT_RADIUS*1.4:
             return n
     return None
 
@@ -495,11 +495,11 @@ def draw():
     draw_lines(heads[0])
     if SHOW_PREVIOUS_MOVE and history:
         for src, dst in zip(history[-1], history[-1][1:]):
-            pygame.draw.line(screen, BLACK, src.pos(), dst.pos(), LINE_THICKNESS*3)
+            pygame.draw.line(screen, BLACK, src.pos(), dst.pos(), int(LINE_THICKNESS*3))
     if SHOW_BEST_MOVES:
         for path in suggested_moves:
             for src, dst in zip(path, path[1:]):
-                pygame.draw.line(screen, BLUE, src.pos(), dst.pos(), LINE_THICKNESS*3)
+                pygame.draw.line(screen, BLUE, src.pos(), dst.pos(), int(LINE_THICKNESS*3))
     draw_dots(heads[0])
 
 while running:
@@ -565,6 +565,8 @@ while running:
                 elif can_select(mouse_node):
                     highlight = possible_paths(mouse_node)
                     selected = mouse_node
+                else:
+                    deselect()
         else:
             if (mouse_node := collide()) is not None and mouse_node.piece == turn.get():
                 hovered = mouse_node
